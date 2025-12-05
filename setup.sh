@@ -4,9 +4,10 @@
 
 set -e
 
-echo "=========================================="
+echo ""
 echo "  Claude Frontend Sniper - Setup"
-echo "=========================================="
+echo "  ==============================="
+echo ""
 
 # Check if Docker is available
 if ! command -v docker &> /dev/null && ! command -v docker.exe &> /dev/null; then
@@ -54,56 +55,44 @@ CATALOG_PATH="$DIR/catalogs/sniper-catalog.yaml"
 # Convert to Windows path if running in WSL
 if grep -q Microsoft /proc/version 2>/dev/null; then
     WIN_PATH=$(wslpath -w "$CATALOG_PATH")
-    WIN_PATH_ESCAPED=$(echo "$WIN_PATH" | sed 's/\\/\\\\/g')
+    # Escape backslashes for JSON
+    ESCAPED_PATH=$(echo "$WIN_PATH" | sed 's/\\/\\\\/g')
 else
-    WIN_PATH_ESCAPED="$CATALOG_PATH"
+    ESCAPED_PATH="$CATALOG_PATH"
 fi
 
-# Create temporary config file
-CONFIG_FILE=$(mktemp)
-cat > "$CONFIG_FILE" << EOF
-{
-  "mcpServers": {
-    "docker-gateway": {
-      "command": "$DOCKER_CMD",
-      "args": [
-        "mcp",
-        "gateway",
-        "run",
-        "--additional-catalog",
-        "$WIN_PATH_ESCAPED"
-      ]
-    }
-  }
-}
-EOF
+# Build JSON config string
+JSON_CONFIG="{\"command\":\"$DOCKER_CMD\",\"args\":[\"mcp\",\"gateway\",\"run\",\"--additional-catalog\",\"$ESCAPED_PATH\"]}"
 
 # Check if claude command exists
 if command -v claude &> /dev/null; then
-    claude mcp add-json docker-gateway --scope user < "$CONFIG_FILE"
+    echo "Injecting MCP configuration..."
+    claude mcp add-json docker-gateway "$JSON_CONFIG" --scope user 2>/dev/null || {
+        echo ""
+        echo "Note: If docker-gateway already exists, run:"
+        echo "  claude mcp remove docker-gateway --scope user"
+        echo "Then run this script again."
+    }
     echo ""
     echo "Configuration injected into Claude Code!"
 else
     echo ""
-    echo "Claude CLI not found. Manual configuration required."
-    echo "Add this to your Claude Code MCP settings:"
+    echo "Claude CLI not found. Add this to your MCP settings manually:"
     echo ""
-    cat "$CONFIG_FILE"
+    echo "  Name: docker-gateway"
+    echo "  Config: $JSON_CONFIG"
 fi
 
-rm -f "$CONFIG_FILE"
-
 echo ""
-echo "=========================================="
 echo "  Setup Complete!"
-echo "=========================================="
+echo "  ==============="
 echo ""
-echo "Chrome DevTools available at: http://localhost:9222"
+echo "  Chrome DevTools: http://localhost:9222"
 echo ""
-echo "Available tools in Claude Code:"
-echo "  - navigate, screenshot, click, type"
-echo "  - scroll, wait_for_selector"
-echo "  - get_computed_styles, get_network_errors"
-echo "  - get_console_logs, mobile_mode"
+echo "  Tools available:"
+echo "    navigate, screenshot, click, type, scroll"
+echo "    wait_for_selector, get_computed_styles"
+echo "    get_network_errors, get_console_logs, mobile_mode"
 echo ""
-echo "Test with: Ask Claude to 'navigate to https://example.com and take a screenshot'"
+echo "  Test: Ask Claude to 'navigate to example.com and screenshot'"
+echo ""

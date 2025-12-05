@@ -1,183 +1,107 @@
+<div align="center">
+
 # Claude Frontend Sniper
 
-A persistent Chrome DevTools Protocol (CDP) server for the Model Context Protocol (MCP), designed to work with Docker MCP Gateway. Zero crashes. Perfect UI debugging.
+**Persistent Chrome DevTools for Claude Code**
 
-## Why Sniper vs Official?
+[![Docker Hub](https://img.shields.io/docker/pulls/nullrunner/claude-frontend-sniper?style=flat-square&logo=docker&label=pulls)](https://hub.docker.com/r/nullrunner/claude-frontend-sniper)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-green?style=flat-square)](https://modelcontextprotocol.io)
 
-| Feature | Official chrome-devtools-mcp | Claude Frontend Sniper |
-|---------|------------------------------|------------------------|
-| Session Persistence | :x: Resets on every command | :white_check_mark: Maintains page state |
-| Docker Stability | :x: Crashes frequently | :white_check_mark: Resilient reconnection |
-| Mobile Testing | :x: Not available | :white_check_mark: iPhone X simulation |
-| User Interaction | :warning: JS eval only | :white_check_mark: Native click, type, scroll |
-| Network Security | :x: Blocks `host.docker.internal` | :white_check_mark: Host Header Bypass |
-| Console Logs | :x: Not captured | :white_check_mark: Full console capture |
+*Stop guessing CSS issues. Let Claude see your UI.*
 
-## Features
+</div>
 
-- **Persistent Sessions**: Page state maintained between tool calls
-- **Host Header Workaround**: Bypasses Chrome's localhost-only restriction for Docker containers
-- **10 Tools**: Navigate, screenshot, click, type, scroll, wait, CSS inspection, network errors, console logs, mobile mode
+---
 
-## Tools
+## Why Sniper?
 
-| Tool | Description |
-|------|-------------|
-| `navigate` | Navigate to URL, wait for network idle |
-| `screenshot` | Capture viewport as JPEG |
-| `click` | Click element by CSS selector |
-| `type` | Type text into input field |
-| `scroll` | Scroll by coordinates or to element |
-| `wait_for_selector` | Wait for element to appear |
-| `get_computed_styles` | Get CSS styles for element |
-| `get_network_errors` | List failed network requests |
-| `get_console_logs` | Capture console logs (errors, warnings, info) |
-| `mobile_mode` | Toggle iPhone X viewport |
+| Feature | Official MCP | **Sniper** |
+|---------|:------------:|:----------:|
+| Session Persistence | :x: | :white_check_mark: |
+| Docker Stability | :x: | :white_check_mark: |
+| Mobile Testing | :x: | :white_check_mark: |
+| Native Interactions | :x: | :white_check_mark: |
+| Console Logs | :x: | :white_check_mark: |
+| Host Header Bypass | :x: | :white_check_mark: |
+
+---
 
 ## Quick Start
 
-### 1. Start Chrome Container
-
 ```bash
-docker run -d \
-  --name chrome-persistent \
-  --restart unless-stopped \
-  -p 9222:9222 \
-  --shm-size=2g \
-  --entrypoint chromium-browser \
-  zenika/alpine-chrome:with-puppeteer \
-  --no-sandbox \
-  --remote-debugging-address=0.0.0.0 \
-  --remote-debugging-port=9222 \
-  --disable-gpu \
-  --disable-dev-shm-usage \
-  --window-size=1920,1080 \
-  --headless
+# Clone
+git clone https://github.com/null-runner/claude-frontend-sniper.git
+cd claude-frontend-sniper
+
+# Setup (starts Chrome + configures Claude Code)
+./setup.sh
 ```
 
-### 2. Add to Docker MCP Gateway
+That's it. Ask Claude: *"Navigate to my localhost:3000 and take a screenshot"*
 
-Add to `~/.docker/mcp/catalogs/custom-servers.yaml`:
+---
 
-```yaml
-version: 3
-name: custom-servers
-displayName: Custom MCP Servers
-registry:
-  chromedev:
-    description: Chrome DevTools MCP Server
-    title: Chrome DevTools
-    type: server
-    image: nullrunner/claude-frontend-sniper:latest
-    ref: ""
-    tools:
-      - name: navigate
-      - name: screenshot
-      - name: click
-      - name: type
-      - name: scroll
-      - name: wait_for_selector
-      - name: get_computed_styles
-      - name: get_network_errors
-      - name: mobile_mode
-    env:
-      - name: CHROME_HOST
-        value: host.docker.internal
-      - name: CHROME_PORT
-        value: "9222"
-    prompts: 0
-    resources: {}
-```
+## Tools
 
-### 3. Enable Server
+| Tool | What it does |
+|------|--------------|
+| `navigate` | Go to URL, wait for load |
+| `screenshot` | Capture viewport |
+| `click` | Click element |
+| `type` | Type into input |
+| `scroll` | Scroll page/element |
+| `wait_for_selector` | Wait for element |
+| `get_computed_styles` | CSS debugging |
+| `get_network_errors` | Failed requests |
+| `get_console_logs` | JS console output |
+| `mobile_mode` | iPhone X viewport |
 
-```bash
-docker mcp server enable chromedev
-docker mcp client connect claude-code
-```
+---
+
+## Requirements
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Claude Code](https://claude.ai/download)
+
+---
+
+## Documentation
+
+- [Setup Guide](SETUP_GUIDE.md) - Manual installation, configuration options
+- [Troubleshooting](TROUBLESHOOTING.md) - Common issues and fixes
+- [Architecture](ARCHITECTURE.md) - How it works under the hood
+
+---
 
 ## How It Works
 
-### The Host Header Problem
-
-Chrome's DevTools Protocol rejects HTTP requests where the `Host` header is not `localhost` or an IP address. When connecting from a Docker container via `host.docker.internal`, Chrome returns:
-
 ```
-Host header is specified and is not an IP address or localhost.
-```
-
-### The Solution
-
-This server fetches `/json/version` with a spoofed `Host: localhost` header:
-
-```javascript
-const req = http.request({
-  host: CHROME_HOST,           // host.docker.internal
-  port: CHROME_PORT,           // 9222
-  path: "/json/version",
-  headers: { "Host": "localhost" }  // Trick Chrome
-}, ...);
-```
-
-Then replaces `ws://localhost/` with the actual host:port in the WebSocket URL.
-
-## Building Locally
-
-```bash
-docker build -t chrome-devtools-mcp:latest .
-```
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHROME_HOST` | `host.docker.internal` | Chrome container hostname |
-| `CHROME_PORT` | `9222` | Chrome DevTools port |
-
-### Linux without Docker Desktop
-
-If you're on native Linux (no Docker Desktop), `host.docker.internal` doesn't exist. Use your host IP:
-
-```yaml
-env:
-  - name: CHROME_HOST
-    value: "172.17.0.1"  # Docker bridge gateway IP
-```
-
-Or find your IP: `ip route | grep docker0 | awk '{print $9}'`
-
-## Troubleshooting
-
-### "HTTP Internal Server Error"
-
-Chrome is rejecting the connection. Ensure:
-1. Chrome container is running: `docker ps | grep chrome`
-2. Port 9222 is accessible: `curl http://localhost:9222/json/version`
-
-### "Unknown tool: chromedev:navigate"
-
-The gateway is using `:` separator but your code expects `__`. This server handles both.
-
-### Screenshots show wrong page
-
-The page state persists. If you navigated elsewhere manually, the server will screenshot that page.
-
-## Architecture
-
-```
-Claude Code (WSL)
+Claude Code (WSL/Mac/Linux)
     ↓
 Docker MCP Gateway
     ↓
-Chrome DevTools MCP (this container, stdio)
+Sniper MCP Server (this container)
     ↓
-Alpine Chrome (persistent, port 9222)
+Chrome DevTools Protocol
+    ↓
+Persistent Chrome Browser
 ```
+
+The key innovation: **Host Header Bypass**. Chrome rejects connections from Docker containers because `host.docker.internal` isn't `localhost`. Sniper spoofs the header.
+
+---
 
 ## License
 
 MIT
 
-## Author
+---
 
-[null-runner](https://github.com/null-runner)
+<div align="center">
+
+**[Report Bug](https://github.com/null-runner/claude-frontend-sniper/issues)** · **[Request Feature](https://github.com/null-runner/claude-frontend-sniper/issues)**
+
+Made with coffee by [null-runner](https://github.com/null-runner)
+
+</div>

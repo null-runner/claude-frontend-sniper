@@ -3,7 +3,7 @@ name: frontend-sniper
 displayName: Claude Frontend Sniper
 registry:
   chromedev:
-    description: "Chrome DevTools MCP - Zero crashes, persistent sessions, 9 tools for UI debugging"
+    description: "Chrome DevTools MCP - Zero crashes, persistent sessions, 10 tools for UI debugging"
     title: Frontend Sniper
     type: server
     image: nullrunner/claude-frontend-sniper:latest
