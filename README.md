@@ -2,11 +2,22 @@
 
 A persistent Chrome DevTools Protocol (CDP) server for the Model Context Protocol (MCP), designed to work with Docker MCP Gateway. Zero crashes. Perfect UI debugging.
 
+## Why Sniper vs Official?
+
+| Feature | Official chrome-devtools-mcp | Claude Frontend Sniper |
+|---------|------------------------------|------------------------|
+| Session Persistence | :x: Resets on every command | :white_check_mark: Maintains page state |
+| Docker Stability | :x: Crashes frequently | :white_check_mark: Resilient reconnection |
+| Mobile Testing | :x: Not available | :white_check_mark: iPhone X simulation |
+| User Interaction | :warning: JS eval only | :white_check_mark: Native click, type, scroll |
+| Network Security | :x: Blocks `host.docker.internal` | :white_check_mark: Host Header Bypass |
+| Console Logs | :x: Not captured | :white_check_mark: Full console capture |
+
 ## Features
 
 - **Persistent Sessions**: Page state maintained between tool calls
 - **Host Header Workaround**: Bypasses Chrome's localhost-only restriction for Docker containers
-- **9 Tools**: Navigate, screenshot, click, type, scroll, wait, CSS inspection, network errors, mobile mode
+- **10 Tools**: Navigate, screenshot, click, type, scroll, wait, CSS inspection, network errors, console logs, mobile mode
 
 ## Tools
 
@@ -20,6 +31,7 @@ A persistent Chrome DevTools Protocol (CDP) server for the Model Context Protoco
 | `wait_for_selector` | Wait for element to appear |
 | `get_computed_styles` | Get CSS styles for element |
 | `get_network_errors` | List failed network requests |
+| `get_console_logs` | Capture console logs (errors, warnings, info) |
 | `mobile_mode` | Toggle iPhone X viewport |
 
 ## Quick Start

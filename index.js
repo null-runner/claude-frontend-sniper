@@ -81,7 +81,7 @@ async function getPage() {
   } catch (err) { console.error(err); process.exit(1); }
 }
 
-const server = new Server({ name: "sniper", version: "3.0" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "sniper", version: "3.1.0" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -125,6 +125,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "get_network_errors",
         description: "Returns a list of failed network requests.",
         inputSchema: { type: "object", properties: {} }
+      },
+      {
+        name: "get_console_logs",
+        description: "Returns captured console logs (errors, warnings, info). Useful for debugging JS issues.",
+        inputSchema: { type: "object", properties: { clear: { type: "boolean", description: "Clear logs after retrieval" } } }
       },
       {
         name: "mobile_mode",
@@ -198,6 +203,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const errors = requestLogs.slice();
         requestLogs.length = 0;
         return { content: [{ type: "text", text: errors.length ? JSON.stringify(errors, null, 2) : "No network errors detected." }] };
+    }
+    if (name === "get_console_logs") {
+        const logs = consoleLogs.slice();
+        if (request.params.arguments?.clear !== false) consoleLogs.length = 0;
+        if (!logs.length) return { content: [{ type: "text", text: "No console logs captured." }] };
+        const formatted = logs.map(l => `[${l.type.toUpperCase()}] ${l.text}`).join("\n");
+        return { content: [{ type: "text", text: formatted }] };
     }
     if (name === "mobile_mode") {
       if (request.params.arguments.enable) await p.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });

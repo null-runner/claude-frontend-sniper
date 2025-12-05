@@ -17,6 +17,7 @@ registry:
       - name: wait_for_selector
       - name: get_computed_styles
       - name: get_network_errors
+      - name: get_console_logs
       - name: mobile_mode
     env:
       - name: CHROME_HOST
