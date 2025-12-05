@@ -59,11 +59,15 @@ docker run -d --name chrome-persistent --restart unless-stopped \
 
 ### Option B: Docker MCP Gateway
 
-> **Warning**: The Docker MCP Gateway has bugs affecting custom servers.
-> See [PR #278](https://github.com/docker/mcp-gateway/pull/278) and [PR #279](https://github.com/docker/mcp-gateway/pull/279).
-> Use Option A until these are merged.
+> **Warning**: The official Docker MCP Gateway has bugs affecting custom servers.
+> See [Known Issues](#known-issues). Use Option A or the patched fork below.
 
 ```bash
+# Use patched fork (recommended if you want Gateway)
+git clone https://github.com/null-runner/mcp-gateway.git
+cd mcp-gateway && go build -o docker-mcp ./cmd/docker-mcp
+
+# Then setup Sniper
 git clone https://github.com/null-runner/claude-frontend-sniper.git
 cd claude-frontend-sniper
 ./setup.sh
