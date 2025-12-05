@@ -6,15 +6,9 @@ registry:
     description: "Sniper Chrome: Zero-config, lazy-loaded UI debugger that fixes Browserless crashes"
     title: Chrome Sniper
     type: server
+    # Windows version (use cmd /c for inline shell wrapper)
     command:
-      - docker
+      - cmd
     args:
-      - run
-      - -i
-      - --rm
-      - --init
-      - -e
-      - CHROME_HOST=host.docker.internal
-      - -e
-      - CHROME_PORT=3333
-      - claude-frontend-sniper:latest
+      - /c
+      - docker run -i --rm --init -e CHROME_HOST=host.docker.internal -e CHROME_PORT=3333 claude-frontend-sniper:latest
