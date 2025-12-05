@@ -37,28 +37,6 @@ jobs:
             -e CHROME_PORT=9222 \
             nullrunner/claude-frontend-sniper:latest | head -50
 
-  test-macos:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Docker via Colima
-        run: |
-          brew install docker colima
-          colima start --cpu 2 --memory 4
-
-      - name: Run setup script
-        run: |
-          chmod +x ./setup.sh
-          ./setup.sh
-
-      - name: Verify Chrome container running
-        run: |
-          sleep 5
-          docker ps
-          docker ps | grep -q chrome-persistent || (echo "Chrome container not running!" && exit 1)
-
-      - name: Test Chrome DevTools endpoint
-        run: |
-          curl -s http://localhost:9222/json/version | head -20
+  # Note: macOS test removed - GitHub Actions macOS runners don't support
+  # nested virtualization well (Colima/Docker Desktop require VMs).
+  # The setup.sh works on macOS with Docker Desktop installed locally.
