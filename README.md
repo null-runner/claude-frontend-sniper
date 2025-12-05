@@ -1,6 +1,6 @@
-# Chrome DevTools MCP Server
+# Claude Frontend Sniper
 
-A persistent Chrome DevTools Protocol (CDP) server for the Model Context Protocol (MCP), designed to work with Docker MCP Gateway.
+A persistent Chrome DevTools Protocol (CDP) server for the Model Context Protocol (MCP), designed to work with Docker MCP Gateway. Zero crashes. Perfect UI debugging.
 
 ## Features
 
@@ -56,7 +56,7 @@ registry:
     description: Chrome DevTools MCP Server
     title: Chrome DevTools
     type: server
-    image: nullrunner/chrome-devtools-mcp:latest
+    image: nullrunner/claude-frontend-sniper:latest
     ref: ""
     tools:
       - name: navigate
