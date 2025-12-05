@@ -27,18 +27,47 @@
 
 ---
 
-## Quick Start
+## Installation
+
+### Option A: Standalone (Recommended)
+
+Works with just Docker - no additional dependencies.
 
 ```bash
-# Clone
-git clone https://github.com/null-runner/claude-frontend-sniper.git
-cd claude-frontend-sniper
+# 1. Start Chrome container
+docker run -d --name chrome-persistent --restart unless-stopped \
+  -p 9222:9222 --shm-size=2g \
+  zenika/alpine-chrome:with-puppeteer \
+  --no-sandbox --remote-debugging-address=0.0.0.0 \
+  --remote-debugging-port=9222 --disable-gpu --headless
 
-# Setup (starts Chrome + configures Claude Code)
-./setup.sh
+# 2. Add to Claude Code (~/.claude.json)
 ```
 
-That's it. Ask Claude: *"Navigate to my localhost:3000 and take a screenshot"*
+```json
+{
+  "mcpServers": {
+    "sniper": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--network", "host",
+               "-e", "CHROME_HOST=localhost", "-e", "CHROME_PORT=9222",
+               "nullrunner/claude-frontend-sniper:latest"]
+    }
+  }
+}
+```
+
+### Option B: Docker MCP Gateway
+
+> **Warning**: The Docker MCP Gateway has bugs affecting custom servers.
+> See [PR #278](https://github.com/docker/mcp-gateway/pull/278) and [PR #279](https://github.com/docker/mcp-gateway/pull/279).
+> Use Option A until these are merged.
+
+```bash
+git clone https://github.com/null-runner/claude-frontend-sniper.git
+cd claude-frontend-sniper
+./setup.sh
+```
 
 ---
 
@@ -77,11 +106,9 @@ That's it. Ask Claude: *"Navigate to my localhost:3000 and take a screenshot"*
 ## How It Works
 
 ```
-Claude Code (WSL/Mac/Linux)
+Claude Code
     ↓
-Docker MCP Gateway
-    ↓
-Sniper MCP Server (this container)
+Sniper MCP Server (Docker container)
     ↓
 Chrome DevTools Protocol
     ↓
@@ -89,6 +116,17 @@ Persistent Chrome Browser
 ```
 
 The key innovation: **Host Header Bypass**. Chrome rejects connections from Docker containers because `host.docker.internal` isn't `localhost`. Sniper spoofs the header.
+
+---
+
+## Known Issues
+
+**Docker MCP Gateway** has several open bugs affecting custom servers:
+- [PR #263](https://github.com/docker/mcp-gateway/pull/263) - Tool name prefix separator (`:` → `__`)
+- [PR #278](https://github.com/docker/mcp-gateway/pull/278) - Prefixed names sent to remote servers
+- [PR #279](https://github.com/docker/mcp-gateway/pull/279) - Claude clients excluded from tool activation
+
+**Recommendation**: Use standalone installation (Option A) until these PRs are merged.
 
 ---
 
