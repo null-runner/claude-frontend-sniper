@@ -1,0 +1,64 @@
+name: Test Setup Script
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run setup script
+        run: |
+          chmod +x ./setup.sh
+          ./setup.sh
+
+      - name: Verify Chrome container running
+        run: |
+          sleep 5
+          docker ps
+          docker ps | grep -q chrome-persistent || (echo "Chrome container not running!" && exit 1)
+
+      - name: Test Chrome DevTools endpoint
+        run: |
+          curl -s http://localhost:9222/json/version | head -20
+
+      - name: Test MCP server responds
+        run: |
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
+          docker run --rm -i --network host \
+            -e CHROME_HOST=localhost \
+            -e CHROME_PORT=9222 \
+            nullrunner/claude-frontend-sniper:latest | head -50
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Docker via Colima
+        run: |
+          brew install docker colima
+          colima start --cpu 2 --memory 4
+
+      - name: Run setup script
+        run: |
+          chmod +x ./setup.sh
+          ./setup.sh
+
+      - name: Verify Chrome container running
+        run: |
+          sleep 5
+          docker ps
+          docker ps | grep -q chrome-persistent || (echo "Chrome container not running!" && exit 1)
+
+      - name: Test Chrome DevTools endpoint
+        run: |
+          curl -s http://localhost:9222/json/version | head -20
