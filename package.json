@@ -1,0 +1,17 @@
+{
+  "name": "claude-frontend-sniper",
+  "version": "1.0.0",
+  "description": "Robust Chrome DevTools MCP Server for Claude - Zero crashes, perfect UI debugging",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "puppeteer-core": "^23.10.1"
+  },
+  "keywords": ["mcp", "chrome", "devtools", "claude", "frontend", "debugging"],
+  "author": "",
+  "license": "MIT"
+}
