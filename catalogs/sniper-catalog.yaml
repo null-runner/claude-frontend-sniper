@@ -1,14 +1,27 @@
 version: 3
 name: frontend-sniper
-displayName: Frontend Sniper Catalog
+displayName: Claude Frontend Sniper
 registry:
   chromedev:
-    description: "Sniper Chrome: Zero-config, lazy-loaded UI debugger that fixes Browserless crashes"
-    title: Chrome Sniper
+    description: "Chrome DevTools MCP - Zero crashes, persistent sessions, 9 tools for UI debugging"
+    title: Frontend Sniper
     type: server
-    # Windows version (use cmd /c for inline shell wrapper)
-    command:
-      - cmd
-    args:
-      - /c
-      - docker run -i --rm --init -e CHROME_HOST=host.docker.internal -e CHROME_PORT=3333 claude-frontend-sniper:latest
+    image: nullrunner/claude-frontend-sniper:latest
+    ref: ""
+    tools:
+      - name: navigate
+      - name: screenshot
+      - name: click
+      - name: type
+      - name: scroll
+      - name: wait_for_selector
+      - name: get_computed_styles
+      - name: get_network_errors
+      - name: mobile_mode
+    env:
+      - name: CHROME_HOST
+        value: host.docker.internal
+      - name: CHROME_PORT
+        value: "9222"
+    prompts: 0
+    resources: {}

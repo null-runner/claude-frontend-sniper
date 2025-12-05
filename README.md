@@ -122,6 +122,18 @@ docker build -t chrome-devtools-mcp:latest .
 | `CHROME_HOST` | `host.docker.internal` | Chrome container hostname |
 | `CHROME_PORT` | `9222` | Chrome DevTools port |
 
+### Linux without Docker Desktop
+
+If you're on native Linux (no Docker Desktop), `host.docker.internal` doesn't exist. Use your host IP:
+
+```yaml
+env:
+  - name: CHROME_HOST
+    value: "172.17.0.1"  # Docker bridge gateway IP
+```
+
+Or find your IP: `ip route | grep docker0 | awk '{print $9}'`
+
 ## Troubleshooting
 
 ### "HTTP Internal Server Error"
