@@ -18,12 +18,12 @@
 
 | Feature | Official MCP | **Sniper** |
 |---------|:------------:|:----------:|
-| Session Persistence | :x: | :white_check_mark: |
-| Docker Stability | :x: | :white_check_mark: |
-| Mobile Testing | :x: | :white_check_mark: |
-| Native Interactions | :x: | :white_check_mark: |
-| Console Logs | :x: | :white_check_mark: |
-| Host Header Bypass | :x: | :white_check_mark: |
+| Session Persistence | ❌ | ✅ |
+| Docker Stability | ❌ | ✅ |
+| Mobile Testing | ❌ | ✅ |
+| Native Interactions | ❌ | ✅ |
+| Console Logs | ❌ | ✅ |
+| Host Header Bypass | ❌ | ✅ |
 
 ---
 
