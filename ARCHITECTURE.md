@@ -1,351 +1,292 @@
-# Architecture & Technical Deep Dive
+# Chrome MCP Docker - Architecture
 
-## The Problem We're Solving
+## Overview
 
-### 1. The `about:blank` Crash
+Chrome MCP Docker provides persistent Chrome DevTools for AI coding assistants via MCP (Model Context Protocol). It enables Claude Code and other MCP clients to debug frontend UIs with real browser capabilities.
 
-When using official `chrome-devtools-mcp` with Browserless/Docker:
-
-**Symptom**: Browser shows `about:blank` instead of the navigated URL, then crashes.
-
-**Root Cause**: **Target Mismatch**
-- MCP connects to browser's **root WebSocket** (`ws://host:port/devtools/browser/XXXXX`)
-- Browser creates new page with its own WebSocket (`ws://host:port/devtools/page/YYYYY`)
-- MCP keeps watching the wrong target → sees `about:blank`
-- Eventually Chrome/Puppeteer gets confused and crashes
-
-### 2. The `_targetId` Crash
+## Architecture Diagram
 
 ```
-Error: Cannot read properties of undefined (reading '_targetId')
-    at Connection.send (puppeteer-core/lib/cjs/puppeteer/common/Connection.js:178:48)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              HOST MACHINE                                    │
+│                                                                             │
+│  ┌─────────────────────┐        ┌─────────────────────────────────────────┐ │
+│  │   Claude Code       │        │         DOCKER                          │ │
+│  │   (or any MCP       │        │                                         │ │
+│  │    client)          │        │  ┌─────────────────────────────────────┐│ │
+│  │                     │        │  │  zenika/alpine-chrome:with-puppeteer││ │
+│  │  ┌───────────────┐  │        │  │                                     ││ │
+│  │  │ MCP Protocol  │  │ stdio  │  │  • Chromium (headless)              ││ │
+│  │  │ (stdin/stdout)│◄─┼────────┼──┤  • Full CSS/font rendering          ││ │
+│  │  └───────────────┘  │        │  │  • CDP on port 9222                 ││ │
+│  │                     │        │  │  • Persistent session               ││ │
+│  └─────────────────────┘        │  │                                     ││ │
+│           │                     │  └──────────────┬──────────────────────┘│ │
+│           │                     │                 │ :9222                  │ │
+│           │                     │  ┌──────────────▼──────────────────────┐│ │
+│           │                     │  │  nullrunner/chrome-mcp-docker       ││ │
+│           └─────────────────────┼──►                                     ││ │
+│                                 │  │  • Node.js 20 Alpine                ││ │
+│                                 │  │  • puppeteer-core                   ││ │
+│                                 │  │  • MCP SDK                          ││ │
+│                                 │  │  • Host Header Bypass               ││ │
+│                                 │  │                                     ││ │
+│                                 │  │  Tools:                             ││ │
+│                                 │  │  ├── navigate                       ││ │
+│                                 │  │  ├── screenshot                     ││ │
+│                                 │  │  ├── click / type / scroll          ││ │
+│                                 │  │  ├── wait_for_selector              ││ │
+│                                 │  │  ├── get_computed_styles            ││ │
+│                                 │  │  ├── get_network_errors             ││ │
+│                                 │  │  ├── get_console_logs               ││ │
+│                                 │  │  └── mobile_mode                    ││ │
+│                                 │  └─────────────────────────────────────┘│ │
+│                                 └─────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Root Cause**: Browserless Puppeteer Proxy Bug
-- Browserless runs a Puppeteer proxy layer between you and Chrome
-- When you try to connect directly to a **page target** WebSocket, the proxy fails
-- The proxy expects connections to go through `puppeteer.connect()` using its HTTP endpoint
-- Direct CDP connections bypass the proxy → undefined `_targetId` → crash
+## Component Details
 
-### 3. Container Exit (stdio EOF)
+### 1. Chrome Container (zenika/alpine-chrome)
 
-**Symptom**: MCP container exits immediately with Exit Code 0
-
-**Root Cause**:
-- MCP servers use stdio transport (stdin/stdout for communication)
-- Without stdin connected, the Node.js process sees EOF and exits
-- Docker's `-i` flag keeps stdin open, but Docker MCP Gateway doesn't always use it correctly
-
-### 4. Multi-Tab Chaos
-
-**Symptom**: After using `new_page`, navigation stops working and screenshots show wrong content
-
-**Root Cause**:
-- Creating multiple tabs makes Chrome juggle multiple page targets
-- CDP connections get confused about which target is active
-- MCP loses track of the "main" page
-
-## Our Solution: Claude Frontend Sniper
-
-### Core Design Principles
-
-1. **Single Page Only** - Physically remove `new_page` tool
-2. **Puppeteer Native Connection** - Use `puppeteer.connect()` instead of direct CDP
-3. **Page Target Reuse** - Always reuse the same page, never create new ones
-4. **Graceful Restart** - Let Docker handle crashes with `--init` and `--rm`
-
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Claude Code (WSL)                                       │
-│  - Sends MCP stdio commands                             │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ Docker MCP Gateway                                      │
-│  - Launches MCP server containers on-demand             │
-│  - Manages stdio transport                              │
-│  - Hot-loading via mcp-add                              │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────────────────────────┐
-│ Claude Frontend Sniper (this container)                 │
-│  - Node.js 20 Alpine                                    │
-│  - Puppeteer Core 23.10.1                               │
-│  - MCP SDK 1.0.1                                        │
-│  - Tools: navigate, screenshot, evaluate, console       │
-└────────────────┬────────────────────────────────────────┘
-                 │
-                 ▼ puppeteer.connect({ browserURL })
-┌─────────────────────────────────────────────────────────┐
-│ Browserless Chrome (persistent container)               │
-│  - Port 3000 (internal) → 3333 (host)                   │
-│  - Full font support for UI debugging                   │
-│  - Headless Chrome with CDP enabled                     │
-└─────────────────────────────────────────────────────────┘
+```bash
+docker run -d --name chrome-persistent \
+  --restart unless-stopped \
+  -p 9222:9222 \
+  --shm-size=2g \
+  zenika/alpine-chrome:with-puppeteer \
+  --no-sandbox \
+  --remote-debugging-address=0.0.0.0 \
+  --remote-debugging-port=9222 \
+  --disable-gpu \
+  --headless
 ```
 
-### Key Implementation Details
+**Why zenika/alpine-chrome?**
+| Feature | zenika/alpine-chrome | browserless/chrome |
+|---------|---------------------|-------------------|
+| Size | ~1.4GB | ~4.5GB |
+| Stealth/anti-bot | No | Yes |
+| Use case | Debug own sites | Automate external sites |
+| Memory | ~300MB | ~500MB |
 
-#### 1. Puppeteer Connection Strategy
+For UI debugging of your own applications, stealth is not needed. zenika is lightweight and sufficient.
+
+### 2. MCP Server (nullrunner/chrome-mcp-docker)
+
+```dockerfile
+FROM node:20-alpine
+COPY package.json index.js .
+RUN npm install
+ENTRYPOINT ["node", "index.js"]
+```
+
+**Key Innovation: Host Header Bypass**
+
+Chrome rejects CDP connections from Docker because `host.docker.internal` isn't `localhost`:
 
 ```javascript
-// ❌ WRONG: Direct CDP connection (causes _targetId crash with Browserless)
-const wsEndpoint = 'ws://host:port/devtools/page/XXXXX';
-const browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
-
-// ✅ CORRECT: Use browserURL (Puppeteer discovers endpoint via HTTP)
-const BROWSER_URL = 'http://host.docker.internal:3333';
-const browser = await puppeteer.connect({ browserURL: BROWSER_URL });
+// Fetch WebSocket endpoint with spoofed Host header
+async function getWSEndpoint() {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: CHROME_HOST,
+      port: CHROME_PORT,
+      path: "/json/version",
+      headers: { "Host": "localhost" }  // <-- Bypass Chrome security
+    }, ...);
+  });
+}
 ```
 
-**Why this works**:
-- Puppeteer fetches `/json/version` from the HTTP endpoint
-- Gets the correct WebSocket URL from Browserless
-- Browserless proxy stays happy
-- No `_targetId` crashes
+## Data Flow
 
-#### 2. Page Reuse Pattern
+```
+┌──────────┐   ┌──────────────┐   ┌───────────────┐   ┌─────────────┐
+│  Claude  │──▶│ MCP Protocol │──▶│ chrome-mcp-   │──▶│   Chrome    │
+│  Code    │   │   (stdio)    │   │ docker        │   │   (CDP)     │
+└──────────┘   └──────────────┘   └───────────────┘   └─────────────┘
+     │                                    │                   │
+     │                                    │                   │
+     ▼                                    ▼                   ▼
+  "navigate to                      puppeteer.         page.goto()
+   localhost:8080"                  connect()          screenshot()
+                                                       evaluate()
+```
+
+## Tools Reference
+
+| Tool | Description | Use Case |
+|------|-------------|----------|
+| `navigate` | Go to URL, wait for load | Load pages |
+| `screenshot` | JPEG viewport capture | Visual debugging |
+| `click` | Click element by selector | Interactions |
+| `type` | Type into input field | Form testing |
+| `scroll` | Scroll page/element | Long pages |
+| `wait_for_selector` | Wait for element | Dynamic content |
+| `get_computed_styles` | CSS properties | Style debugging |
+| `get_network_errors` | Failed requests | API debugging |
+| `get_console_logs` | JS console output | Error hunting |
+| `mobile_mode` | Toggle iPhone X viewport | Responsive testing |
+
+## Session Persistence
+
+The MCP server maintains a persistent connection to Chrome:
 
 ```javascript
 let browser = null;
 let page = null;
 
 async function getPage() {
-  if (page && !page.isClosed()) return page;  // Reuse existing page
-
-  browser = await puppeteer.connect({ browserURL: BROWSER_URL });
-
-  const pages = await browser.pages();
-  if (pages.length > 0) {
-    page = pages[0];  // Use first existing page
-  } else {
-    page = await browser.newPage();  // Create only if none exist
+  // Reuse existing page if still valid
+  if (page && !page.isClosed() && browser && browser.isConnected()) {
+    return page;
   }
 
-  await page.setViewport({ width: 1920, height: 1080 });
+  // Reconnect if needed
+  const wsEndpoint = await getWSEndpoint();
+  browser = await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+
+  // Reuse first page or create new
+  const pages = await browser.pages();
+  page = pages[0] || await browser.newPage();
+
   return page;
 }
 ```
 
-**Benefits**:
-- Single page target = no confusion
-- Survives multiple navigate calls
-- Viewport fixed for consistent screenshots
+This pattern ensures:
+- Sessions survive multiple tool calls
+- No "about:blank" crashes
+- Cookies/localStorage persist across navigations
 
-#### 3. Minimal Tool Surface
+## Network Architecture
 
-We expose ONLY:
-- `navigate` - Go to URL
-- `screenshot` - Take JPEG screenshot (base64)
-- `evaluate` - Run JavaScript in page context
-- `get_console_logs` - Get browser console output
-
-**Deliberately omitted**:
-- ❌ `new_page` - Causes multi-tab chaos
-- ❌ `close_page` - Would kill our only page
-- ❌ `list_tabs` - We don't do tabs
-- ❌ `click`, `type`, etc. - Use Playwright MCP for that
-
-### Docker Configuration
-
-#### Chrome Container (Browserless)
-
-```bash
-docker run -d \
-  --name chrome-devtools-browser \
-  --restart unless-stopped \
-  -p 3333:3000 \
-  --shm-size=2gb \
-  -e ENABLE_DEBUGGER=true \
-  -e CONNECTION_TIMEOUT=600000 \
-  browserless/chrome:latest
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Docker Network (bridge)                       │
+│                                                                 │
+│   ┌─────────────────┐            ┌─────────────────────────┐   │
+│   │ chrome-mcp-     │◄──────────▶│ chrome-persistent       │   │
+│   │ docker          │  internal  │                         │   │
+│   │                 │  :9222     │ zenika/alpine-chrome    │   │
+│   └────────┬────────┘            └─────────────────────────┘   │
+│            │                                                    │
+└────────────┼────────────────────────────────────────────────────┘
+             │
+             │ stdio (MCP)
+             ▼
+       ┌───────────┐
+       │  Claude   │
+       │  Code     │
+       └───────────┘
 ```
 
-**Why these flags**:
-- `ENABLE_DEBUGGER=true` - Enables CDP on port 3000
-- `CONNECTION_TIMEOUT=600000` - 10min timeout for long debugging sessions
-- `--shm-size=2gb` - Chrome needs shared memory for rendering
-- Port mapping `3333:3000` - Internal Browserless port is 3000
+## Comparison with Related Projects
 
-#### MCP Server Container (Sniper)
-
-Launched on-demand by Docker MCP Gateway:
-
-```bash
-docker run -i --rm --init \
-  -e CHROME_HOST=host.docker.internal \
-  -e CHROME_PORT=3333 \
-  claude-frontend-sniper:latest
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        MCP Chrome Tools Ecosystem                            │
+│                                                                             │
+│  ┌─────────────────────────────────┐  ┌─────────────────────────────────┐  │
+│  │ chrome-mcp-docker (PUBLIC)      │  │ private-chrome-mcp-docker       │  │
+│  │                                 │  │                                 │  │
+│  │ Purpose: UI/CSS debugging       │  │ Purpose: Gemini AI automation   │  │
+│  │ Chrome: zenika/alpine-chrome    │  │ Chrome: browserless/chrome      │  │
+│  │ Stealth: No                     │  │ Stealth: Yes (puppeteer-extra)  │  │
+│  │ Accounts: None                  │  │ Accounts: 4 burner containers   │  │
+│  │                                 │  │                                 │  │
+│  │ Tools:                          │  │ Tools (superset):               │  │
+│  │ - navigate                      │  │ - All public tools              │  │
+│  │ - screenshot                    │  │ - gemini_send                   │  │
+│  │ - click/type/scroll             │  │ - gemini_check_auth             │  │
+│  │ - get_computed_styles           │  │ - smart_login                   │  │
+│  │ - get_console_logs              │  │ - smart_learn_pattern           │  │
+│  │ - mobile_mode                   │  │                                 │  │
+│  └─────────────────────────────────┘  └─────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why these flags**:
-- `-i` - Keep stdin open (MCP stdio transport)
-- `--rm` - Auto-cleanup when stopped
-- `--init` - Proper signal handling for graceful shutdown
-- `host.docker.internal` - Docker's magic DNS for host network
+## Performance
 
-## Troubleshooting
+| Metric | Value |
+|--------|-------|
+| MCP container memory | ~50MB |
+| Chrome container memory | ~300MB |
+| Cold start | ~2-3s |
+| Warm tool call | <100ms |
+| Screenshot size | ~50-100KB (JPEG 80%) |
 
-### Container Exits Immediately
+## Security Considerations
 
-**Symptom**: `docker ps` shows no sniper container running
+1. **Network**: Chrome only exposed on localhost:9222
+2. **Sandbox**: Chrome runs with `--no-sandbox` (required in Docker)
+3. **Code execution**: `evaluate` runs JS in page context (sandboxed)
+4. **No secrets**: MCP server has no access to host filesystem
 
-**Cause**: stdin not connected (MCP sees EOF)
+## Problems We Solved
 
-**Fix**: Ensure Docker MCP Gateway catalog uses `-i` flag:
-```yaml
-args:
-  - run
-  - -i  # ← Critical
-  - --rm
-  - --init
-  # ...
+This project exists because the official `chrome-devtools-mcp` has critical bugs with Docker:
+
+### 1. The `about:blank` Crash
+**Symptom**: Browser shows `about:blank` instead of navigated URL, then crashes.
+
+**Root Cause**: Target Mismatch - MCP connects to browser's root WebSocket but Chrome creates pages with different WebSocket targets. MCP watches wrong target → sees `about:blank`.
+
+**Our Fix**: Single page reuse pattern in `getPage()` - never create new pages, always reuse existing.
+
+### 2. The `_targetId` Crash
+```
+Error: Cannot read properties of undefined (reading '_targetId')
 ```
 
-### "Connection refused" to Chrome
+**Root Cause**: Browserless has a Puppeteer proxy layer. Direct CDP connections bypass it → crash.
 
-**Symptom**: `Error: connect ECONNREFUSED`
+**Our Fix**: Use `puppeteer.connect()` with Host Header Bypass instead of direct WebSocket.
 
-**Checks**:
-1. Is Chrome container running? `docker ps | grep chrome`
-2. Is port 3333 bound? `curl http://localhost:3333/json/version`
-3. Correct hostname? Use `host.docker.internal` (not `localhost`)
+### 3. Container Exit (stdio EOF)
+**Symptom**: MCP container exits immediately with Exit Code 0.
 
-**Fix**: Restart Chrome container with correct flags
+**Root Cause**: MCP uses stdio transport. Without stdin connected, Node.js sees EOF and exits.
 
-### Tools Not Loading in Claude Code
+**Our Fix**: Always use `-i` flag in Docker run commands.
 
-**Symptom**: `mcp-add chromedev` returns "Connection closed"
+### 4. Host Header Rejection
+**Symptom**: Chrome rejects connections from `host.docker.internal`.
 
-**Cause**: Gateway not starting or catalog not found
+**Our Fix**: Spoof `Host: localhost` header when fetching WebSocket endpoint.
 
-**Checks**:
-1. Is Gateway in `~/.claude.json`? `cat ~/.claude.json | jq .mcpServers`
-2. Catalog path correct? Use absolute Windows path
-3. No local `.mcp.json` overriding? `ls -la .mcp.json`
-
-**Fix**:
-```bash
-# Use global config, remove project-level overrides
-rm .mcp.json  # If exists in project
-# Edit ~/.claude.json to add Gateway
-```
-
-### Screenshot Shows Wrong Page
-
-**Symptom**: Screenshot shows old content after navigation
-
-**Cause**: Page not waiting for load
-
-**Fix**: Our `navigate` uses `waitUntil: 'domcontentloaded'` - might need `networkidle0` for SPAs:
-
-```javascript
-await page.goto(url, { waitUntil: 'networkidle0' });
-```
+> See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions to common issues.
 
 ## Lessons Learned
 
-### What Worked
+### What Works
+- ✅ `puppeteer.connect()` with Host Header Bypass
+- ✅ Single page reuse (eliminates target mismatch)
+- ✅ Minimal tool API (less surface area = fewer bugs)
+- ✅ Docker `--init` flag (proper signal handling)
+- ✅ zenika/alpine-chrome for own-site debugging
 
-1. ✅ **Puppeteer `browserURL`** - Solves Browserless proxy issues
-2. ✅ **Single page reuse** - Eliminates target mismatch
-3. ✅ **Minimal tool API** - Less surface area = fewer bugs
-4. ✅ **Docker `--init`** - Proper signal handling prevents zombie processes
-5. ✅ **Global Gateway config** - Hot-loading works across all projects
+### What Doesn't Work
+- ❌ Direct CDP WebSocket connections (Browserless proxy rejects)
+- ❌ Creating new pages per navigation (causes chaos)
+- ❌ `browserURL` parameter (doesn't work with Docker networking)
+- ❌ Alpine Chrome without `--shm-size` (Chrome crashes)
 
-### What Didn't Work
+## Quick Troubleshooting
 
-1. ❌ **Direct CDP connections** - Browserless proxy rejects them
-2. ❌ **Page Target Lock via bash** - Targets keep changing/disappearing
-3. ❌ **Alpine Chrome** - Missing fonts, renders UI incorrectly
-4. ❌ **Project-local MCP config** - Overrides global, breaks hot-loading
-5. ❌ **`longLived: true` catalog flag** - Gateway ignores it, not a real feature
-
-### Critical Insights
-
-**Target Mismatch is the root of all evil**:
-- `about:blank` crashes
-- Screenshot mismatches
-- Navigation failures
-→ **Solution**: Never create new pages, always reuse one page
-
-**Browserless needs special handling**:
-- Has a Puppeteer proxy layer
-- Doesn't like direct WebSocket connections
-- Works beautifully with `puppeteer.connect({ browserURL })`
-→ **Solution**: Let Puppeteer discover the endpoint via HTTP
-
-**Docker MCP Gateway is finnicky**:
-- Silently fails if catalog path is wrong
-- Project config overrides global (counter-intuitive)
-- Requires `-i` flag but doesn't always apply it
-→ **Solution**: Use global `~/.claude.json`, test catalog with manual `docker run`
-
-## Performance Considerations
-
-### Startup Time
-- **Cold start**: ~2-3s (Puppeteer connection + page setup)
-- **Warm calls**: <100ms (page already exists)
-
-### Memory Usage
-- **Sniper container**: ~50MB (Node + Puppeteer)
-- **Chrome container**: ~300-400MB (Browserless)
-- **Total**: ~450MB persistent
-
-### Optimization Tips
-
-1. **Keep Chrome running** - Don't restart it, use `--restart unless-stopped`
-2. **Reuse pages** - Our `getPage()` pattern caches the page object
-3. **JPEG screenshots** - 80% quality is 10x smaller than PNG, looks identical
-4. **Viewport lock** - Fixed 1920x1080 = consistent rendering
-
-## Security Notes
-
-### Network Isolation
-
-Chrome container is exposed on `localhost:3333`:
-- ✅ Not accessible from external network
-- ✅ Only containers on `host.docker.internal` can reach it
-- ⚠️ Any process on the host can access it
-
-**Recommendation**: Use Docker networks for production:
-```bash
-docker network create chrome-net
-# Run both containers on chrome-net instead of host
-```
-
-### Code Execution Risk
-
-`evaluate` tool runs arbitrary JavaScript in browser:
-- ✅ Sandboxed in Chrome renderer process
-- ✅ No access to Node.js/filesystem
-- ⚠️ Can access any page content (cookies, localStorage, DOM)
-
-**Recommendation**: Trust the AI or restrict with MCP permissions
-
-## Future Improvements
-
-### Potential Features
-- [ ] Multi-browser support (Firefox via Playwright)
-- [ ] Mobile viewport presets
-- [ ] Video recording (Browserless supports it)
-- [ ] Network HAR export
-- [ ] Accessibility tree inspection
-
-### Known Limitations
-- **No interaction tools** - Use Playwright MCP for clicks/forms
-- **Single page only** - Can't debug multi-tab apps
-- **No browser extensions** - Headless Chrome limitation
-- **Font rendering differences** - Even Browserless isn't pixel-perfect vs real Chrome
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "Connection refused" | Chrome not running | `docker start chrome-persistent` |
+| "about:blank" | Target mismatch | Restart both containers |
+| Empty screenshot | Page not loaded | Add wait after navigate |
+| Missing fonts | Web fonts blocked | Check CSP headers |
+| Container exits | Missing `-i` flag | Add `-i` to docker run |
 
 ## References
 
 - [Puppeteer Documentation](https://pptr.dev/)
-- [Browserless Docker Hub](https://hub.docker.com/r/browserless/chrome)
-- [Docker MCP Gateway GitHub](https://github.com/docker/mcp-gateway)
-- [Model Context Protocol Spec](https://modelcontextprotocol.io/)
+- [zenika/alpine-chrome](https://github.com/Zenika/alpine-chrome)
 - [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
