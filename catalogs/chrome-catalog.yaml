@@ -1,12 +1,12 @@
 version: 3
-name: frontend-sniper
-displayName: Claude Frontend Sniper
+name: chrome-mcp-docker
+displayName: Chrome MCP Docker
 registry:
   chromedev:
     description: "Chrome DevTools MCP - Zero crashes, persistent sessions, 10 tools for UI debugging"
-    title: Frontend Sniper
+    title: Chrome MCP Docker
     type: server
-    image: nullrunner/claude-frontend-sniper:latest
+    image: nullrunner/chrome-mcp-docker:latest
     ref: ""
     tools:
       - name: navigate

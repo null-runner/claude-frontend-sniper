@@ -1,12 +1,12 @@
 #!/bin/bash
-# Claude Frontend Sniper - Automatic Setup Script
-# Configures Claude Code to use the Sniper MCP server via Docker MCP Gateway
+# Chrome MCP Docker - Automatic Setup Script
+# Configures MCP clients to use the Chrome DevTools MCP server via Docker MCP Gateway
 
 set -e
 
 echo ""
-echo "  Claude Frontend Sniper - Setup"
-echo "  ==============================="
+echo "  Chrome MCP Docker - Setup"
+echo "  ========================="
 echo ""
 
 # Check if Docker is available
@@ -43,14 +43,14 @@ $DOCKER_CMD run -d \
   --window-size=1920,1080 \
   --headless
 
-echo "[3/4] Pulling Sniper MCP server..."
-$DOCKER_CMD pull nullrunner/claude-frontend-sniper:latest
+echo "[3/4] Pulling Chrome MCP Docker server..."
+$DOCKER_CMD pull nullrunner/chrome-mcp-docker:latest
 
 echo "[4/4] Configuring Claude Code..."
 
 # Get the directory where this script lives
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CATALOG_PATH="$DIR/catalogs/sniper-catalog.yaml"
+CATALOG_PATH="$DIR/catalogs/chrome-catalog.yaml"
 
 # Convert to Windows path if running in WSL
 if grep -q Microsoft /proc/version 2>/dev/null; then

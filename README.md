@@ -1,23 +1,23 @@
 <div align="center">
 
-# Claude Frontend Sniper
+# Chrome MCP Docker
 
-**Persistent Chrome DevTools for Claude Code**
+**Persistent Chrome DevTools MCP Server**
 
-[![Docker Hub](https://img.shields.io/docker/pulls/nullrunner/claude-frontend-sniper?style=flat-square&logo=docker&label=pulls)](https://hub.docker.com/r/nullrunner/claude-frontend-sniper)
+[![Docker Hub](https://img.shields.io/docker/pulls/nullrunner/chrome-mcp-docker?style=flat-square&logo=docker&label=pulls)](https://hub.docker.com/r/nullrunner/chrome-mcp-docker)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-green?style=flat-square)](https://modelcontextprotocol.io)
 
-*Stop guessing CSS issues. Let Claude see your UI.*
+*Stable, persistent Chrome DevTools for AI coding assistants.*
 
 </div>
 
 ---
 
-## Why Sniper?
+## Why Docker?
 
-| Feature | Official MCP | **Sniper** |
-|---------|:------------:|:----------:|
+| Feature | Official MCP | **This** |
+|---------|:------------:|:--------:|
 | Session Persistence | ❌ | ✅ |
 | Docker Stability | ❌ | ✅ |
 | Mobile Testing | ❌ | ✅ |
@@ -47,11 +47,11 @@ docker run -d --name chrome-persistent --restart unless-stopped \
 ```json
 {
   "mcpServers": {
-    "sniper": {
+    "chrome": {
       "command": "docker",
       "args": ["run", "--rm", "-i", "--network", "host",
                "-e", "CHROME_HOST=localhost", "-e", "CHROME_PORT=9222",
-               "nullrunner/claude-frontend-sniper:latest"]
+               "nullrunner/chrome-mcp-docker:latest"]
     }
   }
 }
@@ -67,9 +67,9 @@ docker run -d --name chrome-persistent --restart unless-stopped \
 git clone https://github.com/null-runner/mcp-gateway.git
 cd mcp-gateway && go build -o docker-mcp ./cmd/docker-mcp
 
-# Then setup Sniper
-git clone https://github.com/null-runner/claude-frontend-sniper.git
-cd claude-frontend-sniper
+# Then setup chrome-mcp-docker
+git clone https://github.com/null-runner/chrome-mcp-docker.git
+cd chrome-mcp-docker
 ./setup.sh
 ```
 
@@ -95,7 +95,7 @@ cd claude-frontend-sniper
 ## Requirements
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- [Claude Code](https://claude.ai/download)
+- Any MCP-compatible client (Claude Code, Cursor, Windsurf, Cline, etc.)
 
 ---
 
@@ -110,16 +110,16 @@ cd claude-frontend-sniper
 ## How It Works
 
 ```
-Claude Code
+AI Coding Assistant (Claude, Cursor, etc.)
     ↓
-Sniper MCP Server (Docker container)
+chrome-mcp-docker (MCP Server)
     ↓
 Chrome DevTools Protocol
     ↓
-Persistent Chrome Browser
+Persistent Chrome Browser (Docker)
 ```
 
-The key innovation: **Host Header Bypass**. Chrome rejects connections from Docker containers because `host.docker.internal` isn't `localhost`. Sniper spoofs the header.
+The key innovation: **Host Header Bypass**. Chrome rejects connections from Docker containers because `host.docker.internal` isn't `localhost`. This server spoofs the header.
 
 ---
 
@@ -142,8 +142,8 @@ MIT
 
 <div align="center">
 
-**[Report Bug](https://github.com/null-runner/claude-frontend-sniper/issues)** · **[Request Feature](https://github.com/null-runner/claude-frontend-sniper/issues)**
+**[Report Bug](https://github.com/null-runner/chrome-mcp-docker/issues)** · **[Request Feature](https://github.com/null-runner/chrome-mcp-docker/issues)**
 
-Made with coffee by [null-runner](https://github.com/null-runner)
+Made with ☕ by [null-runner](https://github.com/null-runner)
 
 </div>

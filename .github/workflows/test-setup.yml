@@ -35,7 +35,7 @@ jobs:
           docker run --rm -i --network host \
             -e CHROME_HOST=localhost \
             -e CHROME_PORT=9222 \
-            nullrunner/claude-frontend-sniper:latest | head -50
+            nullrunner/chrome-mcp-docker:latest | head -50
 
   # Note: macOS test removed - GitHub Actions macOS runners don't support
   # nested virtualization well (Colima/Docker Desktop require VMs).

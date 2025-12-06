@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: nullrunner/claude-frontend-sniper
+  IMAGE_NAME: nullrunner/chrome-mcp-docker
 
 jobs:
   build-and-push:
@@ -60,6 +60,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          repository: nullrunner/claude-frontend-sniper
-          short-description: "Persistent Chrome DevTools MCP for Claude Code - 10 tools, zero crashes"
+          repository: nullrunner/chrome-mcp-docker
+          short-description: "Persistent Chrome DevTools MCP Server - Docker-based, 10 tools, works with any MCP client"
           readme-filepath: ./README.md
